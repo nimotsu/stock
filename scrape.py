@@ -81,6 +81,7 @@ class Stock:
     def get_growth_rate(self):
         """scrape growth rate from simply wall st"""
 
+        # search the link for stock
         stock_cd = self.stock_cd.replace("-", " ")
         params = (
             ('x-algolia-agent', 'Algolia for JavaScript (4.2.0); Browser (lite)'),
@@ -90,6 +91,8 @@ class Stock:
         data = f'{{"query":"{stock_cd} klse","highlightPostTag":" ","highlightPreTag":" ","restrictHighlightAndSnippetArrays":true}}'
         try:
             response = requests.post('https://17iqhzwxzw-dsn.algolia.net/1/indexes/companies/query', params=params, data=data)
+
+            # generate link
             stock_url = response.json()['hits'][0]['url']
             url = "https://simplywall.st" + stock_url
         except:
@@ -105,11 +108,24 @@ class Stock:
     def get_beta(self):
         """scrape beta from infrontanalytics.com"""
 
-        url = f"https://www.infrontanalytics.com/fe-EN/33123FM/{self.stock_cd}-/Beta"
+        # search the link for stock
+        params = (
+            ('keyname', self.stock_cd.replace("-", " ")),
+        )
+        response = requests.get('https://www.infrontanalytics.com/Eurofin/autocomplete', params=params, verify=False)
+        result = response.json()[0]
+
+        # generate stock url
+        name = result['name'].replace(" ", "-").replace(".", "") + "-"
+        code = result['isin']
+        url = f"https://www.infrontanalytics.com/fe-en/{code}/{name}/beta"
+
+        # get beta
         html = url2html(url)
-        m = re.search(r"shows a Beta of ([+-]?\d+\.\d+).", "shows a Beta of 1.56.")
-        beta = m.groups()[0]
-        return float(beta), url
+        m = re.search(r"shows a Beta of ([+-]?\d+\.\d+).", html)
+        self.beta = m.groups()[0]
+        print(f"Beta: {self.beta}")
+        return float(self.beta), url
     
     def get_discount_rate(self):
         """convert beta to discount rate for dcf model"""
@@ -128,7 +144,7 @@ class Stock:
                 discount_rate = dr[key]
             else:
                 discount_rate = 9
-        self.discount_rate = discount_rate/100
+        self.discount_rate = round(discount_rate/100, 2)
         print(f"Discount Rate: {self.discount_rate}")
         return [self.discount_rate, url]
         
@@ -279,7 +295,7 @@ def analyse(company_name):
 
 
     # Ten-year cash flow calculations, bottom table
-    start_row = 11
+    start_row = 14
 
     # headers
     worksheet.write_column(start_row, 0, ["Year", "Cash Flow", "Discount Rate", "Discounted Value"])
@@ -319,7 +335,7 @@ def analyse(company_name):
     worksheet.write_column('H2', df.iloc[index, 1])
 
     # report
-    worksheet.write_column('A18', [my_stock.get_growth_rate()[1], my_stock.get_beta()[1]])
+    worksheet.write_column('A22', [my_stock.get_growth_rate()[1], my_stock.get_beta()[1]])
 
     workbook.close()
     # Shift + Ctrl + F9
