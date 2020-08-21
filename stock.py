@@ -50,25 +50,28 @@ class Webpage:
 # Handle all methods related to stock
 class Stock:
     def __init__(self, stock_cd):
+        self.urls = []
         self.stock_cd = stock_cd
         print(f"Stock Cd: {self.stock_cd}")
 
         self.overview, self.stock_id = self.scrape_overview()
         print(f"Stock Id: {self.stock_id}")
 
-        self.growth_rate, self.growth_rate_url = self.scrape_growth_rate()
-        self.beta, self.beta_url = self.scrape_beta()
+        self.growth_rate, simplywallst_url = self.scrape_growth_rate()
+        self.beta, infrontanalytics_url = self.scrape_beta()
         self.discount_rate = self.scrape_discount_rate()
+        self.urls.append(simplywallst_url).append(infrontanalytics_url)
 
         self.ratios = self.scrape_ratios()
         self.cash_flow = self.scrape_cash_flow()
         self.balance_sheet = self.scrape_balance_sheet()
-
-
         # self.income_statementp = Webpage.from_url(f"https://www.investing.com/equities/{stock_cd}-income-statement")
         # self.earningsp = Webpage.from_url(f"https://www.investing.com/equities/{stock_cd}-earnings")
         # self.financialp = Webpage.from_url(f"https://www.investing.com/equities/{stock_cd}-financial-summary")
     
+    """
+    Simply Wall St
+    """
     def scrape_growth_rate(self):
         """scrape growth rate from simply wall st"""
 
@@ -96,6 +99,9 @@ class Stock:
         print(f"Growth Rate: {self.growth_rate}")
         return self.growth_rate, url
     
+    """
+    Infront Analytics
+    """
     def scrape_beta(self):
         """scrape beta from infrontanalytics.com"""
 
@@ -137,9 +143,36 @@ class Stock:
         discount_rate = round(discount_rate/100, 2)
         print(f"Discount Rate: {discount_rate}")
         return discount_rate
+
+    """
+    i3investor
+    """
+    def srape_isummary(self):
+        headers = {
+            'User-Agent': 'Mozilla',
+        }
+
+        params = (
+            ('qt', 'lscomn'),
+            ('qp', 'nestle'),
+        )
+
+        response = requests.get('https://klse.i3investor.com/cmservlet.jsp', headers=headers, params=params)
+        query = response.text.split(":")[0]
+        params = (
+    ('sa', 'ss'),
+    ('q', query),
+)
+
+response = requests.get('https://klse.i3investor.com/quoteservlet.jsp', headers=headers, params=params)
+html = response.text
+
+
         
 
-    
+    """
+    investing
+    """
     def scrape_overview(self):
         stock_cd = self.stock_cd
         def scrape_id(overviewp):
@@ -147,7 +180,8 @@ class Stock:
             stock_id = m.groups()[0]
             return stock_id
 
-        overviewp = Webpage.from_url(f"https://www.investing.com/equities/{stock_cd}")
+        url = f"https://www.investing.com/equities/{stock_cd}"
+        overviewp = Webpage.from_url(url)
         soup = overviewp.soup
         last_price = soup.find('span', {'id':'last_last'}).get_text()
         ls = ['Last Price', last_price]
@@ -156,7 +190,7 @@ class Stock:
         overview = overviewp.get_span('span', ['float_lang_base_1', 'float_lang_base_2'])
         stock_id = scrape_id(overviewp)
 
-        return pd.concat([df, overview]), stock_id
+        return pd.concat([df, overview]), stock_id, url
     
     def scrape_ratios(self):
         stock_cd = self.stock_cd

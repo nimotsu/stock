@@ -16,10 +16,11 @@ warnings.filterwarnings("ignore")
 now = datetime.datetime.now()
 
 
-
-    
 def search(term: str, df, index = 1):
-    return float(df[df[0].str.contains('(?i)' + term)][index].values[0].replace(",", ""))
+    result = df[df[0].str.contains('(?i)' + term)][index].values[0]
+    if type(result) == 'str':
+        result.replace(",", "")
+    return float(result)
 
 
 def rename_excel(my_stock, excel_name):
@@ -38,7 +39,8 @@ def rename_excel(my_stock, excel_name):
     rate = my_stock.discount_rate
 
     npv = (values / (1+rate)**np.arange(1, len(values)+1)).sum(axis=0) / shares_outstanding
-    print(f"NPV per share: {npv}")
+    print(f"NPV per Share: {npv}")
+    print(f"Last Price: {last_price}")
 
     os.rename(excel_name, my_stock.stock_cd + "-" + str(round(npv, 2)) + "-" + str(last_price) + ".xlsx") 
 
@@ -54,13 +56,14 @@ def analyse(company_name):
     worksheet = workbook.add_worksheet(sheet_name)
 
     # format excel
-    worksheet.set_column('A:K', 10)
+    worksheet.set_column('A:A', 20)
+    worksheet.set_column('A:I', 10)
+
     currency_format = workbook.add_format({'num_format': '$#,##0.00'})
     percentage_format = workbook.add_format({
         'num_format': '0.0%',
         'bg_color': '#dae8ec',
         'border': 1})
-
     colored_format = workbook.add_format({
         'num_format': '$#,##0.00',
         'bg_color': '#dae8ec',
@@ -69,6 +72,9 @@ def analyse(company_name):
 
 
     # Stock and write to excel
+
+    # Required data for npv calculation, table 1
+    # --------------------------------------------------------
     table1 = {
         "Name of Stock": my_stock.stock_cd.replace("-", " ").title(),
         "Operating Cash Flow": search("Cash From Operating Activities", my_stock.cash_flow),
@@ -79,25 +85,24 @@ def analyse(company_name):
         "Discount Rate": 0
     }
 
-
-    # Required data, table 1
     worksheet.write_column('A1', table1.keys())
     worksheet.write_column('B1', table1.values(), colored_format)
 
-    # rewrite in percentage
+    # rewrite in percentage format
     worksheet.write('B5', my_stock.growth_rate, percentage_format)
     worksheet.write('B7', my_stock.discount_rate, percentage_format)
 
 
 
     # Ten-year cash flow calculations, bottom table
+    # --------------------------------------------------------
     start_row = 14
 
     # headers
     worksheet.write_column(start_row, 0, ["Year", "Cash Flow", "Discount Rate", "Discounted Value"])
     worksheet.write_row(start_row, 1, list(range(now.year, now.year + 10, 1)))
 
-    # calculations
+    # calculation formulas
     cash_flow = ["=B2*(1+B5)"]
     cash_flow.extend(["=" + chr(ord('B') + i) + str(start_row+2) + "*(1+$B$5)" for i in range(10)])
     # +1, +2
@@ -118,20 +123,24 @@ def analyse(company_name):
         worksheet.write_formula(dv_row, i+1, discounted_value[i], currency_format)
 
 
-    # Intrinsic values, table 2
+    # NPV and intrinsic values calculations, table 2
+    # --------------------------------------------------------
     worksheet.write_column('D2', ["PV of 10 yr Cash Flows", "Intrinsic Value per Share", 
                                   "- Debt per Share", "+ Cash per share", "net Cash per Share"])
     worksheet.write_column('E2', [f"=SUM(B{dv_row+1}:K{dv_row+1})", "=E2/B6", "=B3/B6", "=B4/B6", "=E3-E4+E5"], colored_format)
 
 
     # Stock overview, table 3
+    # --------------------------------------------------------
     df = my_stock.overview.reset_index(drop=True)
     index = [0, 5, 6, 7, 8, 9, 11, 15]
     worksheet.write_column('G2', df.iloc[index, 0])
     worksheet.write_column('H2', df.iloc[index, 1])
 
-    # report
-    worksheet.write_column('A22', [my_stock.growth_rate, my_stock.beta])
+
+    # Jot down links from simply wall st and infront analytics
+    # --------------------------------------------------------
+    worksheet.write_column('A22', my_stocks.urls)
 
     workbook.close()
     # Shift + Ctrl + F9
@@ -146,4 +155,5 @@ def main():
     companies = sys.argv[1:]
     list(map(lambda x: analyse(x),companies))
   
-main()
+if __name__ == "__main__":
+    main()
