@@ -23,7 +23,10 @@ def search(term: str, df, index = 1):
     if '%' in result:
         result = result.replace("%", "")
         result = float(result) / 100
-    return float(result)
+    try:
+        return float(result)
+    except:
+        return result
 
 
 def rename_excel(my_stock, excel_name):

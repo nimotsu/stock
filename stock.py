@@ -49,9 +49,9 @@ class Webpage:
 
 # Handle all methods related to stock
 class Stock:
-    def __init__(self, stock_cd):
+    def __init__(self, company):
         self.urls = []
-        self.stock_cd = stock_cd
+        self.stock_cd = self.scrape_link(company)
         print(f"Stock Cd: {self.stock_cd}")
 
         self.overview, self.stock_id, investing_url = self.scrape_overview()
@@ -72,7 +72,20 @@ class Stock:
         # self.income_statementp = Webpage.from_url(f"https://www.investing.com/equities/{stock_cd}-income-statement")
         # self.earningsp = Webpage.from_url(f"https://www.investing.com/equities/{stock_cd}-earnings")
         # self.financialp = Webpage.from_url(f"https://www.investing.com/equities/{stock_cd}-financial-summary")
-    
+
+    def scrape_link(self, company):
+        headers = {
+            'User-Agent': 'Mozilla/5.0',
+        }
+        params = (
+            ('q', company),
+        )
+        response = requests.get('https://www.investing.com/search/', headers=headers, params=params)
+        soup = BeautifulSoup(response.text)
+        result = soup.find('a', ['js-inner-all-results-quote-item'])
+        stock_cd = result['href'].replace("/equities/", "")
+        return stock_cd
+
     """
     Simply Wall St
     """
