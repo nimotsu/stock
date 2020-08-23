@@ -54,13 +54,17 @@ class Stock:
         self.stock_cd = stock_cd
         print(f"Stock Cd: {self.stock_cd}")
 
-        self.overview, self.stock_id = self.scrape_overview()
+        self.overview, self.stock_id, investing_url = self.scrape_overview()
         print(f"Stock Id: {self.stock_id}")
 
         self.growth_rate, simplywallst_url = self.scrape_growth_rate()
         self.beta, infrontanalytics_url = self.scrape_beta()
         self.discount_rate = self.scrape_discount_rate()
-        self.urls.append(simplywallst_url).append(infrontanalytics_url)
+        self.i3summary, self.i3business_performance, i3investor_url = self.scrape_isummary()
+        self.urls.append(investing_url)
+        self.urls.append(simplywallst_url)
+        self.urls.append(infrontanalytics_url)
+        self.urls.append(i3investor_url)
 
         self.ratios = self.scrape_ratios()
         self.cash_flow = self.scrape_cash_flow()
@@ -95,7 +99,7 @@ class Stock:
         html = url2html(url)
         soup = BeautifulSoup(html, 'html.parser')
         growth = soup.find('p', {'data-cy-id': 'key-metric-value-forecasted-annual-earnings-growth'}).get_text().replace('%', '')
-        self.growth_rate = float(growth)/100
+        self.growth_rate = float(growth) / 100
         print(f"Growth Rate: {self.growth_rate}")
         return self.growth_rate, url
     
@@ -128,15 +132,17 @@ class Stock:
         """convert beta to discount rate for dcf model"""
         
         discount_rate = 0
-        dr = {0.8: 5, 
+        dr = {
+        0.8: 5, 
         1: 6, 
         1.1: 6.8, 
         1.2: 7, 
         1.3: 7.9, 
         1.4: 8, 
-        1.5: 8.9}
+        1.5: 8.9
+        }
         for key in dr:
-            if self.beta < key:
+            if self.beta <= key:
                 discount_rate = dr[key]
             else:
                 discount_rate = 9
@@ -147,27 +153,51 @@ class Stock:
     """
     i3investor
     """
-    def srape_isummary(self):
-        headers = {
-            'User-Agent': 'Mozilla',
-        }
-
+    def scrape_isummary(self):
+        # search for link in the website
+        headers = {'User-Agent': 'Mozilla'}
         params = (
             ('qt', 'lscomn'),
             ('qp', 'nestle'),
         )
-
         response = requests.get('https://klse.i3investor.com/cmservlet.jsp', headers=headers, params=params)
         query = response.text.split(":")[0]
+
+        # generate link to stock page
         params = (
-    ('sa', 'ss'),
-    ('q', query),
-)
+            ('sa', 'ss'),
+            ('q', query),
+        )
+        response = requests.get('https://klse.i3investor.com/quoteservlet.jsp', headers=headers, params=params)
 
-response = requests.get('https://klse.i3investor.com/quoteservlet.jsp', headers=headers, params=params)
-html = response.text
+        # scrape for id from stock page
+        html = response.text
+        soup = BeautifulSoup(html)
+        stock_name = soup.find('span', {'class': 'stname'}).text
+        stock_name = re.search("\((\d+)\)", stock_name)
+        stock_id = stock_name.groups()[0]
 
+        # generate link to summary page
+        url = f"https://klse.i3investor.com/servlets/stk/fin/{stock_id}.jsp?type=summary"
+        html = url2html(url)
+        soup = BeautifulSoup(html)
 
+        # get all summary tables
+        result = soup.find_all('div', {'id': 'headerAccordion'})
+        i3summary = pd.read_html(str(result[3]))[0]
+
+        # get business performance tables
+        result = soup.find_all('div', {'id': 'summaryAccordion'})
+        business_performance_by_year = pd.read_html(str(result[1]))[0].dropna()
+        key_result = pd.read_html(str(result[2]))[0].dropna()
+        growth_by_year = pd.read_html(str(result[4]))[0].dropna()
+
+        i3business_performance = {
+         "Business Peformance (by Year)": business_performance_by_year,
+         "Key Result": key_result[['Annual (Unaudited)', 'Last 10 FY Average', 'Last 5 FY Average']],
+         "Growth (by Year)": growth_by_year[['LFY YoY', 'LFY vs AL5FY', 'LFY vs AL10FY']]
+        }
+        return i3summary, i3business_performance, url
         
 
     """
